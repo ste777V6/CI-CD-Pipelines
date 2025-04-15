@@ -1,1 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-staging
+  namespace: staging
+  labels:
+    app: myapp
+spec:
+  replicas: 3  # Number of pods to run in the staging environment
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+        - name: myapp-container
+          image: mydockerhub/myapp:latest  # Use the image built in the pipeline
+          ports:
+            - containerPort: 8080  # Application port
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: myapp-secrets
+                  key: database_url  # Assuming database_url is stored in Kubernetes Secrets
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: myapp-secrets
+                  key: api_key  # Another sensitive variable (API key)
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-staging-service
+  namespace: staging
+spec:
+  selector:
+    app: myapp
+  ports:
+    - protocol: TCP
+      port: 80  # Exposes port 80 externally
+      targetPort: 8080  # The container's internal port
+  type: LoadBalancer  # Or NodePort if you don't have a cloud provider that supports LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp-staging-ingress
+  namespace: staging
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - host: myapp-staging.example.com  # The external hostname for your staging environment
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: myapp-staging-service
+                port:
+                  number: 80
 
